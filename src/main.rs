@@ -1,9 +1,37 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 
-use std::{ffi::CStr, sync::atomic::{AtomicBool, AtomicI32}, ptr::NonNull};
+use std::{
+    ffi::CStr,
+    ptr::NonNull,
+    sync::atomic::{AtomicBool, AtomicI32},
+};
 
-use icrate::{Foundation::{NSRect, CGPoint, CGSize, NSProcessInfo, NSDate, NSDefaultRunLoopMode, NSNotification}, AppKit::{NSTitledWindowMask, NSClosableWindowMask, NSResizableWindowMask, NSWindowController, NSWindow, NSApplication, NSBackingStoreBuffered, NSApplicationActivationPolicyRegular, NSMenu, NSMenuItem, NSEventTypeMouseMoved, NSEventTypeLeftMouseDragged, NSEventTypeRightMouseDragged, NSEventTypeOtherMouseDragged, NSEventTypeLeftMouseDown, NSEventTypeRightMouseDown, NSEventTypeLeftMouseUp, NSEventTypeRightMouseUp, NSEventTypeOtherMouseDown, NSEventTypeOtherMouseUp, NSEventTypeScrollWheel, NSEventTypeFlagsChanged, NSDeviceIndependentModifierFlagsMask, NSEventTypeKeyDown, NSEventTypeKeyUp, NSApplicationDelegate, NSResponder, NSApplicationTerminateReply, NSWindowDelegate}, ns_string};
-use objc2::{rc::{Id, autoreleasepool}, ClassType, sel, ffi::NSUIntegerMax, runtime::{NSObject, NSObjectProtocol, ProtocolObject}, msg_send_id, declare_class, msg_send, mutability::InteriorMutable};
+use icrate::{
+    ns_string,
+    AppKit::{
+        NSApplication, NSApplicationActivationPolicyRegular, NSApplicationDelegate,
+        NSApplicationTerminateReply, NSBackingStoreBuffered, NSClosableWindowMask,
+        NSDeviceIndependentModifierFlagsMask, NSEventTypeFlagsChanged, NSEventTypeKeyDown,
+        NSEventTypeKeyUp, NSEventTypeLeftMouseDown, NSEventTypeLeftMouseDragged,
+        NSEventTypeLeftMouseUp, NSEventTypeMouseMoved, NSEventTypeOtherMouseDown,
+        NSEventTypeOtherMouseDragged, NSEventTypeOtherMouseUp, NSEventTypeRightMouseDown,
+        NSEventTypeRightMouseDragged, NSEventTypeRightMouseUp, NSEventTypeScrollWheel, NSMenu,
+        NSMenuItem, NSResizableWindowMask, NSResponder, NSTitledWindowMask, NSWindow,
+        NSWindowController, NSWindowDelegate,
+    },
+    Foundation::{
+        CGPoint, CGSize, NSDate, NSDefaultRunLoopMode, NSNotification, NSProcessInfo, NSRect,
+    },
+};
+use objc2::{
+    declare_class,
+    ffi::NSUIntegerMax,
+    msg_send, msg_send_id,
+    mutability::InteriorMutable,
+    rc::{autoreleasepool, Id},
+    runtime::{NSObject, NSObjectProtocol, ProtocolObject},
+    sel, ClassType,
+};
 
 bitflags::bitflags! {
     struct NSEventModifierFlags: u8 {
@@ -88,13 +116,10 @@ declare_class!(
 
     unsafe impl NSWindowDelegate for WindowDelegate {
         #[method(windowWillClose:)]
-        unsafe fn window_will_close(
-            &self,
-            _sender: &NSNotification,
-        ) {
+        unsafe fn window_will_close(&self, _sender: &NSNotification) {
             println!("window will close");
             assert!(WINDOW_COUNT.load(std::sync::atomic::Ordering::SeqCst) > 0);
-            TERMINATE.store(true, std::sync::atomic::Ordering::SeqCst);   
+            TERMINATE.store(true, std::sync::atomic::Ordering::SeqCst);
         }
     }
 );
@@ -127,16 +152,39 @@ fn main() {
 
         let terminate = sel!(terminate:);
         let key_equivalent = ns_string!("q");
-        let quit_menu_item = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(), &quit_title, Some(terminate), key_equivalent)  };
+        let quit_menu_item = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                NSMenuItem::alloc(),
+                &quit_title,
+                Some(terminate),
+                key_equivalent,
+            )
+        };
         unsafe { app_menu.addItem(&quit_menu_item) };
         unsafe { app_menu_item.setSubmenu(Some(&app_menu)) };
 
         let rect = NSRect::new(CGPoint::new(0.0, 0.0), CGSize::new(500.0, 500.0));
         let window_style = NSTitledWindowMask | NSClosableWindowMask | NSResizableWindowMask;
-    
-        let window = Id::autorelease(unsafe { NSWindow::initWithContentRect_styleMask_backing_defer(NSWindow::alloc(), rect,window_style, NSBackingStoreBuffered, false) }, pool);
-        let _window_controller = Id::autorelease(unsafe { NSWindowController::initWithWindow(NSWindowController::alloc(), Some(&window)) }, pool);
-        
+
+        let window = Id::autorelease(
+            unsafe {
+                NSWindow::initWithContentRect_styleMask_backing_defer(
+                    NSWindow::alloc(),
+                    rect,
+                    window_style,
+                    NSBackingStoreBuffered,
+                    false,
+                )
+            },
+            pool,
+        );
+        let _window_controller = Id::autorelease(
+            unsafe {
+                NSWindowController::initWithWindow(NSWindowController::alloc(), Some(&window))
+            },
+            pool,
+        );
+
         unsafe { window.setReleasedWhenClosed(false) };
 
         WINDOW_COUNT.store(1, std::sync::atomic::Ordering::SeqCst);
@@ -153,58 +201,88 @@ fn main() {
         unsafe { window.setAcceptsMouseMovedEvents(true) };
 
         while !TERMINATE.load(std::sync::atomic::Ordering::SeqCst) {
-            let Some(event) = (unsafe { NSApp.nextEventMatchingMask_untilDate_inMode_dequeue(NSUIntegerMax as _, Some(&NSDate::distantPast()), NSDefaultRunLoopMode, true) }) else {
+            let Some(event) = (unsafe {
+                NSApp.nextEventMatchingMask_untilDate_inMode_dequeue(
+                    NSUIntegerMax as _,
+                    Some(&NSDate::distantPast()),
+                    NSDefaultRunLoopMode,
+                    true,
+                )
+            }) else {
                 continue;
             };
 
             match unsafe { event.r#type() } {
-                NSEventTypeMouseMoved | NSEventTypeLeftMouseDragged | NSEventTypeRightMouseDragged | NSEventTypeOtherMouseDragged => {
+                NSEventTypeMouseMoved
+                | NSEventTypeLeftMouseDragged
+                | NSEventTypeRightMouseDragged
+                | NSEventTypeOtherMouseDragged => {
                     let current_window = unsafe { NSApp.keyWindow() }.unwrap();
-                    let current_window_content_view = unsafe { current_window.contentView().unwrap() };
+                    let current_window_content_view =
+                        unsafe { current_window.contentView().unwrap() };
                     let adjust_frame = unsafe { current_window_content_view.frame() };
                     let p = unsafe { current_window.mouseLocationOutsideOfEventStream() };
-                    let p = CGPoint::new(p.x.clamp(0.0, adjust_frame.size.width), p.y.clamp(0.0, adjust_frame.size.height));
+                    let p = CGPoint::new(
+                        p.x.clamp(0.0, adjust_frame.size.width),
+                        p.y.clamp(0.0, adjust_frame.size.height),
+                    );
                     let r = NSRect::new(p, CGSize::new(0.0, 0.0));
                     let r = unsafe { current_window_content_view.convertRectToBacking(r) };
                     let p = r.origin;
 
                     println!("mouse moved to {} {}", p.x, p.y);
-                },
+                }
                 NSEventTypeLeftMouseDown => println!("mouse left key down"),
                 NSEventTypeLeftMouseUp => println!("mouse left key up"),
                 NSEventTypeRightMouseDown => println!("mouse right key down"),
                 NSEventTypeRightMouseUp => println!("mouse right key up"),
-                NSEventTypeOtherMouseDown => println!("mouse other key down : {}", unsafe { event.buttonNumber() }),
-                NSEventTypeOtherMouseUp => println!("mouse other key up : {}", unsafe { event.buttonNumber() }),
+                NSEventTypeOtherMouseDown => {
+                    println!("mouse other key down : {}", unsafe { event.buttonNumber() })
+                }
+                NSEventTypeOtherMouseUp => {
+                    println!("mouse other key up : {}", unsafe { event.buttonNumber() })
+                }
                 NSEventTypeScrollWheel => {
-                    let scroll_factor = if unsafe { event.hasPreciseScrollingDeltas() } { 0.1 } else { 1.0 };
+                    let scroll_factor = if unsafe { event.hasPreciseScrollingDeltas() } {
+                        0.1
+                    } else {
+                        1.0
+                    };
                     let dx = unsafe { event.scrollingDeltaX() } * scroll_factor;
                     let dy = unsafe { event.scrollingDeltaX() } * scroll_factor;
                     if dx.abs() > 0.0 || dy.abs() > 0.0 {
                         println!("mouse scroll wheel delta {} {}", dx, dy);
                     }
-                },
+                }
                 NSEventTypeFlagsChanged => {
                     let modifiers = unsafe { event.modifierFlags() };
-                    let keys = NSEventModifierFlags::from_bits(((modifiers & NSDeviceIndependentModifierFlagsMask) >> 16) as _).unwrap();
+                    let keys = NSEventModifierFlags::from_bits(
+                        ((modifiers & NSDeviceIndependentModifierFlagsMask) >> 16) as _,
+                    )
+                    .unwrap();
                     println!(
-                        "mod keys : mask {:03} state {}{}{}{}{}{}{}{}\n", 
-                        keys.bits(), keys.contains(NSEventModifierFlags::ALPHA_SHIFT), 
-                        keys.contains(NSEventModifierFlags::SHIFT), 
-                        keys.contains(NSEventModifierFlags::CONTROL), 
-                        keys.contains(NSEventModifierFlags::ALTERNATE), 
-                        keys.contains(NSEventModifierFlags::COMMAND), 
-                        keys.contains(NSEventModifierFlags::NUMERIC_PAD), 
-                        keys.contains(NSEventModifierFlags::HELP), 
-                        keys.contains(NSEventModifierFlags::FUNCTION))
-                },
+                        "mod keys : mask {:03} state {}{}{}{}{}{}{}{}\n",
+                        keys.bits(),
+                        keys.contains(NSEventModifierFlags::ALPHA_SHIFT),
+                        keys.contains(NSEventModifierFlags::SHIFT),
+                        keys.contains(NSEventModifierFlags::CONTROL),
+                        keys.contains(NSEventModifierFlags::ALTERNATE),
+                        keys.contains(NSEventModifierFlags::COMMAND),
+                        keys.contains(NSEventModifierFlags::NUMERIC_PAD),
+                        keys.contains(NSEventModifierFlags::HELP),
+                        keys.contains(NSEventModifierFlags::FUNCTION)
+                    )
+                }
                 NSEventTypeKeyDown => {
-                    let input_text_utf8 = unsafe { CStr::from_ptr(event.characters().unwrap().UTF8String()) }.to_str().unwrap();
+                    let input_text_utf8 =
+                        unsafe { CStr::from_ptr(event.characters().unwrap().UTF8String()) }
+                            .to_str()
+                            .unwrap();
                     let key_code = unsafe { event.keyCode() };
                     println!("key down {}, text '{}'", key_code, input_text_utf8);
-                },
+                }
                 NSEventTypeKeyUp => println!("key up {}", unsafe { event.keyCode() }),
-                _ => { }
+                _ => {}
             };
 
             unsafe { NSApp.sendEvent(&event) };
