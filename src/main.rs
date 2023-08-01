@@ -140,26 +140,26 @@ fn main() {
         unsafe { NSApp.setDelegate(Some(&ProtocolObject::from_id(dg))) };
         unsafe { NSApp.finishLaunching() };
 
-        let menu_bar = unsafe { NSMenu::new() };
-        let app_menu_item = unsafe { NSMenuItem::new() };
+        let menu_bar = Id::autorelease(unsafe { NSMenu::new() }, pool);
+        let app_menu_item = Id::autorelease(unsafe { NSMenuItem::new() }, pool);
         unsafe { menu_bar.addItem(&app_menu_item) };
         unsafe { NSApp.setMainMenu(Some(&menu_bar)) };
 
-        let app_menu = unsafe { NSMenu::new() };
-        let proc_info = NSProcessInfo::processInfo();
-        let app_name = proc_info.processName();
-        let quit_title = ns_string!("Quit ").stringByAppendingString(&app_name);
+        let app_menu = Id::autorelease(unsafe { NSMenu::new() }, pool);
+        let proc_info = Id::autorelease(NSProcessInfo::processInfo(), pool);
+        let app_name = Id::autorelease(proc_info.processName(), pool);
+        let quit_title = Id::autorelease(ns_string!("Quit ").stringByAppendingString(&app_name), pool);
 
         let terminate = sel!(terminate:);
         let key_equivalent = ns_string!("q");
-        let quit_menu_item = unsafe {
+        let quit_menu_item = Id::autorelease(unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
                 NSMenuItem::alloc(),
                 &quit_title,
                 Some(terminate),
                 key_equivalent,
             )
-        };
+        }, pool);
         unsafe { app_menu.addItem(&quit_menu_item) };
         unsafe { app_menu_item.setSubmenu(Some(&app_menu)) };
 
@@ -192,7 +192,7 @@ fn main() {
         let wdg = WindowDelegate::new();
         unsafe { window.setDelegate(Some(&ProtocolObject::from_id(wdg))) };
 
-        let content_view = unsafe { window.contentView() }.unwrap();
+        let content_view = Id::autorelease(unsafe { window.contentView() }.unwrap(), pool);
         unsafe { content_view.setWantsBestResolutionOpenGLSurface(true) };
 
         unsafe { window.cascadeTopLeftFromPoint(CGPoint::new(20.0, 20.0)) };
